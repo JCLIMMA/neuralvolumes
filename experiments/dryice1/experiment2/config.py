@@ -18,8 +18,7 @@ def get_dataset(camerafilter=lambda x: True, maxframes=-1, subsampletype=None):
         imagemean=100.,
         imagestd=25.,
         subsampletype=subsampletype,
-        # subsamplesize=128,
-        subsamplesize=4,
+        subsamplesize=128,
         worldscale=1. / 256)
 
 def get_autoencoder(dataset):
@@ -40,10 +39,8 @@ def get_autoencoder(dataset):
 # A profile is instantiated by the training or evaluation scripts
 # and controls how the dataset and autoencoder is created
 class Train():
-    # batchsize=16
-    batchsize=2
-    # maxiter=500000
-    maxiter=2
+    batchsize=16
+    maxiter=500000
     def get_autoencoder(self, dataset): return get_autoencoder(dataset)
     def get_dataset(self): return get_dataset(subsampletype="random2")
     def get_optimizer(self, ae):
@@ -78,7 +75,6 @@ class ProgressWriter():
 
 class Progress():
     """Write out diagnostic images during training."""
-    # batchsize=16
     batchsize=16
     def get_ae_args(self): return dict(outputlist=["irgbrec"])
     def get_dataset(self): return get_dataset(maxframes=1)
