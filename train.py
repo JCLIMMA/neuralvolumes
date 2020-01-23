@@ -102,14 +102,14 @@ if __name__ == "__main__":
     # build autoencoder
     starttime = time.time()
     ae = profile.get_autoencoder(dataset)
-    ae = torch.nn.DataParallel(ae, device_ids=args.devices).to("cuda").train()
+    ae = ae.to("cpu").train()
     if args.resume:
         ae.module.load_state_dict(torch.load("{}/aeparams.pt".format(outpath)), strict=False)
     print("Autoencoder instantiated ({:.2f} s)".format(time.time() - starttime))
 
     # build optimizer
     starttime = time.time()
-    aeoptim = profile.get_optimizer(ae.module)
+    aeoptim = profile.get_optimizer(ae)
     lossweights = profile.get_loss_weights()
     print("Optimizer instantiated ({:.2f} s)".format(time.time() - starttime))
 
@@ -119,10 +119,13 @@ if __name__ == "__main__":
     iternum = log.iternum
     prevloss = np.inf
 
-    for epoch in range(10000):
+    for epoch in range(2):
+        print('EPOCH: ', epoch)
+        print('DATALOADER LENGTH: ', len(dataloader))
         for data in dataloader:
+            print('ITERATION START')
             # forward
-            output = ae(iternum, lossweights.keys(), **{k: x.to("cuda") for k, x in data.items()})
+            output = ae(iternum, lossweights.keys(), **{k: x.to("cpu") for k, x in data.items()})
 
             # compute final loss
             loss = sum([
@@ -145,7 +148,7 @@ if __name__ == "__main__":
             # compute evaluation output
             if iternum in evalpoints:
                 with torch.no_grad():
-                    testoutput = ae(iternum, [], **{k: x.to("cuda") for k, x in testbatch.items()}, **progressprof.get_ae_args())
+                    testoutput = ae(iternum, [], **{k: x.to("cpu") for k, x in testbatch.items()}, **progressprof.get_ae_args())
 
                 b = data["campos"].size(0)
                 writer.batch(iternum, iternum * profile.batchsize + torch.arange(b), **testbatch, **testoutput)
@@ -166,10 +169,15 @@ if __name__ == "__main__":
 
             # save intermediate results
             if iternum % 1000 == 0:
-                torch.save(ae.module.state_dict(), "{}/aeparams.pt".format(outpath))
+                torch.save(ae.state_dict(), "{}/aeparams.pt".format(outpath))
 
             iternum += 1
 
+            # break early
+            if iternum >= profile.maxiter:
+                break
+        
+        print('MAXITER: ', profile.maxiter)
         if iternum >= profile.maxiter:
             break
 
