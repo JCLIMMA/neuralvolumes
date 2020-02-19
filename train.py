@@ -87,10 +87,37 @@ if __name__ == "__main__":
     # build dataset & testing dataset
     starttime = time.time()
     testdataset = progressprof.get_dataset()
+    print('--- testdataset')
+    print(f'len: {len(testdataset)}')
+    entry = testdataset[0]
+    for k, v in entry.items():
+        print(k, type(v))
+        if isinstance(v, tuple):
+            print(v[0].shape, v[1].shape)
+        elif torch.is_tensor(v) or isinstance(v, np.ndarray):
+            print(v.shape)
+        else:
+            print(v)
     dataloader = torch.utils.data.DataLoader(testdataset, batch_size=progressprof.batchsize, shuffle=False, drop_last=True, num_workers=0)
     for testbatch in dataloader:
         break
     dataset = profile.get_dataset()
+    print('--- dataset')
+    print(f'len: {len(dataset)}')
+    entry = dataset[0]
+    for k, v in entry.items():
+        print(k, type(v))
+        if isinstance(v, tuple):
+            print(v[0].shape, v[1].shape)
+        elif torch.is_tensor(v) or isinstance(v, np.ndarray):
+            print(v.shape)
+        else:
+            print(v)
+    # print('--- image')
+    # print(entry['image'])
+    # print('--- fixedimage')
+    # print(entry['fixedcamimage'])
+    
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=profile.batchsize, shuffle=True, drop_last=True, num_workers=16)
     print("Dataset instantiated ({:.2f} s)".format(time.time() - starttime))
 
@@ -111,6 +138,7 @@ if __name__ == "__main__":
     starttime = time.time()
     aeoptim = profile.get_optimizer(ae.module)
     lossweights = profile.get_loss_weights()
+    print(f'--- lossweights: {lossweights}')
     print("Optimizer instantiated ({:.2f} s)".format(time.time() - starttime))
 
     # train
@@ -121,8 +149,21 @@ if __name__ == "__main__":
 
     for epoch in range(10000):
         for data in dataloader:
+            print('--- forward')
+            for k, v in data.items():
+                print(k, v.shape if isinstance(v, torch.Tensor) else type(v))
             # forward
             output = ae(iternum, lossweights.keys(), **{k: x.to("cuda") for k, x in data.items()})
+            
+            print('--- output losses')
+            for k, v in output.items():
+                print(k, type(v))
+                if isinstance(v, tuple):
+                    print(v[0].shape, v[1].shape)
+                elif torch.is_tensor(v) or isinstance(v, np.ndarray):
+                    print(v.shape)
+                else:
+                    print(v)
 
             # compute final loss
             loss = sum([
@@ -169,6 +210,9 @@ if __name__ == "__main__":
                 torch.save(ae.module.state_dict(), "{}/aeparams.pt".format(outpath))
 
             iternum += 1
+
+            print('--- End of first iter!')
+            sys.exit()
 
         if iternum >= profile.maxiter:
             break

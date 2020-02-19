@@ -8,6 +8,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from pprint import pprint
+
 class Autoencoder(nn.Module):
     def __init__(self, dataset, encoder, decoder, volsampler, colorcal, dt, stepjitter=0.01, estimatebg=False):
         super(Autoencoder, self).__init__()
@@ -45,21 +47,34 @@ class Autoencoder(nn.Module):
             outputlist=[]):
         result = {"losses": {}}
 
+        print('--- forward (inside)')
+
         # encode input or get encoding
         if encoding is None:
             encout = self.encoder(fixedcamimage, losslist)
+            print('encout:')
+            pprint(encout)
             encoding = encout["encoding"]
+            print(f'encoding: {encoding.shape}')
             result["losses"].update(encout["losses"])
 
+        print(f'campos: {campos.shape}')
         # decode
         decout = self.decoder(encoding, campos, losslist)
         result["losses"].update(decout["losses"])
+        print('decout:')
+        print(decout.keys())
+        print(f"template: {decout['template'].shape}")
+        print(f"warp: {decout['warp'].shape}")
+        pprint(decout['losses'])
 
         # NHWC
         raydir = (pixelcoords - princpt[:, None, None, :]) / focal[:, None, None, :]
         raydir = torch.cat([raydir, torch.ones_like(raydir[:, :, :, 0:1])], dim=-1)
         raydir = torch.sum(camrot[:, None, None, :, :] * raydir[:, :, :, :, None], dim=-2)
         raydir = raydir / torch.sqrt(torch.sum(raydir ** 2, dim=-1, keepdim=True))
+
+        print(f'raydir: {raydir.shape}')
 
         # compute raymarching starting points
         with torch.no_grad():
@@ -77,6 +92,10 @@ class Autoencoder(nn.Module):
             tmin = torch.where(intersections, tmin, torch.zeros_like(tmin))
             tmax = torch.where(intersections, tmax, torch.zeros_like(tmin))
 
+        print(f'tmin: {tmin.shape}')
+        print(f'tmax: {tmax.shape}')
+        print(f't: {t.shape}')
+
         # random starting point
         t = t - self.dt * torch.rand_like(t)
 
@@ -91,6 +110,9 @@ class Autoencoder(nn.Module):
             validf = valid.float()
 
             sample_rgb, sample_alpha = self.volsampler(raypos[:, None, :, :, :], **decout, viewtemplate=viewtemplate)
+
+            print(f'sample_rgb: {sample_rgb.shape}')
+            print(f'sample_alpha: {sample_alpha.shape}')
 
             with torch.no_grad():
                 step = self.dt * torch.exp(self.stepjitter * torch.randn_like(t))
@@ -107,6 +129,8 @@ class Autoencoder(nn.Module):
         if image is not None:
             imagesize = torch.tensor(image.size()[3:1:-1], dtype=torch.float32, device=pixelcoords.device)
             samplecoords = pixelcoords * 2. / (imagesize[None, None, None, :] - 1.) - 1.
+        
+        print(f'samplecoords: {samplecoords.shape}')
 
         # color correction / bg
         if camindex is not None:
@@ -125,6 +149,9 @@ class Autoencoder(nn.Module):
             result["irgbrec"] = rayrgb
         if "ialpharec" in outputlist:
             result["ialpharec"] = rayalpha
+
+        print(f'rayrgb: {rayrgb.shape}')
+        print(f'rayalpha: {rayalpha.shape}')
 
         # opacity prior
         if "alphapr" in losslist:
@@ -147,6 +174,8 @@ class Autoencoder(nn.Module):
                 weight = imagevalid[:, None, None, None].expand_as(image) * validinput[:, None, None, None]
             else:
                 weight = torch.ones_like(image) * validinput[:, None, None, None]
+
+            print(f'weight: {weight}')
 
             irgbsqerr = weight * (image - rayrgb) ** 2
 
